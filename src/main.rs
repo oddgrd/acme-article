@@ -227,7 +227,7 @@ fn client_with_custom_ca_cert() -> Box<Client<HttpsConnector<HttpConnector>, Ful
 }
 
 /// Create a new ACME account that can be restored by using the deserialization
-/// of the returned JSON into a [`instant_acme::AccountCredentials`]
+/// of the returned JSON into a [`instant_acme::Account`]
 async fn create_account(
     http_client: Box<Client<HttpsConnector<HttpConnector>, Full<Bytes>>>,
     email: &str,
