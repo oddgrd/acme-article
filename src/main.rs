@@ -88,8 +88,8 @@ async fn main() -> anyhow::Result<()> {
         .context("failed to notify server that challenge is ready")?;
 
     // We now need to wait until the order reaches an end-state. We refresh the order in a loop,
-    // with exponential backoff, until the order is either ready or deemed invalid.
-    // NOTE: this is taken from instant-acme examples. Make simpler?
+    // with exponential backoff, until the order is either ready or invalid (for example if our
+    // challenge server responded with the wrong key authorization).
     let mut tries = 1u8;
     let mut delay = Duration::from_millis(250);
     loop {
@@ -102,15 +102,14 @@ async fn main() -> anyhow::Result<()> {
 
         delay *= 2;
         tries += 1;
-        match tries < 15 {
-            true => tracing::info!(?state, tries, "order is not ready, waiting {delay:?}"),
-            false => {
-                tracing::error!(
-                    tries,
-                    "timed out before order reached ready state: {state:#?}"
-                );
-                bail!("timed out before order reached ready state");
-            }
+        if tries < 15 {
+            tracing::info!(?state, tries, "order is not ready, waiting {delay:?}");
+        } else {
+            tracing::error!(
+                tries,
+                "timed out before order reached ready state: {state:#?}"
+            );
+            bail!("timed out before order reached ready state");
         }
     }
 
@@ -134,7 +133,6 @@ async fn main() -> anyhow::Result<()> {
         .context("failed to finalize order")?;
 
     // Poll for certificate, do this for a few rounds.
-    // TODO: refactor this
     let mut cert_chain_pem: Option<String> = None;
     let mut retries = 5;
     while cert_chain_pem.is_none() && retries > 0 {
@@ -163,18 +161,14 @@ pub async fn http01_challenge(
 ) -> Result<String, StatusCode> {
     tracing::info!(%token, "received HTTP-01 ACME challenge");
 
-    match challenges.get(&token) {
-        Some(key_auth) => Ok({
-            tracing::info!(
-                %key_auth, "responding to ACME challenge"
-
-            );
+    if let Some(key_auth) = challenges.get(&token) {
+        Ok({
+            tracing::info!(%key_auth, "responding to ACME challenge");
             key_auth.clone()
-        }),
-        None => {
-            tracing::warn!(%token, "didn't find acme challenge");
-            Err(StatusCode::NOT_FOUND)
-        }
+        })
+    } else {
+        tracing::warn!(%token, "didn't find acme challenge");
+        Err(StatusCode::NOT_FOUND)
     }
 }
 
@@ -199,7 +193,7 @@ async fn local_account() -> anyhow::Result<Account> {
 }
 
 /// Only used for local run with Pebble.
-/// See https://github.com/letsencrypt/pebble?tab=readme-ov-file#avoiding-client-https-errors for
+/// See <https://github.com/letsencrypt/pebble?tab=readme-ov-file#avoiding-client-https-errors> for
 /// why we need to add the pebble cert to the client root certificates.
 fn client_with_custom_ca_cert() -> Box<Client<HttpsConnector<HttpConnector>, Full<Bytes>>> {
     use hyper_util::rt::TokioExecutor;
@@ -233,7 +227,7 @@ fn client_with_custom_ca_cert() -> Box<Client<HttpsConnector<HttpConnector>, Ful
 }
 
 /// Create a new ACME account that can be restored by using the deserialization
-/// of the returned JSON into a [instant_acme::AccountCredentials]
+/// of the returned JSON into a [`instant_acme::AccountCredentials`]
 async fn create_account(
     http_client: Box<Client<HttpsConnector<HttpConnector>, Full<Bytes>>>,
     email: &str,
