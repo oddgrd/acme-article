@@ -1,0 +1,12 @@
+version: "3"
+services:
+  pebble:
+    image: ghcr.io/letsencrypt/pebble:latest
+    ports:
+      - 14000:14000 # HTTPS ACME API
+      - 15000:15000 # HTTPS Management API
+    # Connect to our locally running ACME http-01 challenge server.
+    # To get this IP, the default bridge network gateway, run `ip addr show docker0` and get the
+    # inet address from the output.
+    extra_hosts:
+      - "my-domain.com:172.17.0.1"
